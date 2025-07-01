@@ -1,13 +1,13 @@
 package com.library.bookmanagement.service;
 
-
-import com.library.bookmanagement.exception.ResourceNotFoundException;
+import static com.library.bookmanagement.exception.CustomHttpExceptions.*;
 import com.library.bookmanagement.model.Book;
 import com.library.bookmanagement.repository.BookRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+
 import static com.library.bookmanagement.exception.CustomHttpExceptions.*;
 
 @Service
@@ -30,37 +30,49 @@ public class BookService {
     }
 
     public Book save(Book book) {
-        // ✅ Example check: throw ConflictException if ISBN already exists
+        validateBook(book, false);
+
         if (repo.existsByIsbn(book.getIsbn())) {
             throw new ConflictException("Book with ISBN " + book.getIsbn() + " already exists");
-        }
-
-        // ✅ Validate fields manually if needed
-        if (book.getTitle() == null || book.getTitle().trim().isEmpty()) {
-            throw new BadRequestException("Title must not be empty");
         }
 
         return repo.save(book);
     }
 
     public Book update(Long id, Book updatedBook) {
-        Book book = findById(id);
+        Book existing = findById(id);
 
-        if (updatedBook.getTitle() == null || updatedBook.getTitle().isEmpty()) {
-            throw new BadRequestException("Title must not be empty");
+        validateBook(updatedBook, true);
+
+        // Prevent ISBN duplication (excluding current record)
+        if (!existing.getIsbn().equals(updatedBook.getIsbn())
+                && repo.existsByIsbn(updatedBook.getIsbn())) {
+            throw new ConflictException("Another book with ISBN " + updatedBook.getIsbn() + " already exists");
         }
 
-        book.setTitle(updatedBook.getTitle());
-        book.setAuthor(updatedBook.getAuthor());
-        book.setIsbn(updatedBook.getIsbn());
-        book.setPublishedDate(updatedBook.getPublishedDate());
+        existing.setTitle(updatedBook.getTitle().trim());
+        existing.setAuthor(updatedBook.getAuthor().trim());
+        existing.setIsbn(updatedBook.getIsbn().trim());
+        existing.setPublishedDate(updatedBook.getPublishedDate());
 
-        return repo.save(book);
+        return repo.save(existing);
     }
 
     public void delete(Long id) {
         Book book = findById(id);
         repo.delete(book);
     }
-}
 
+    // ✅ Reusable validation helper
+    private void validateBook(Book book, boolean isUpdate) {
+        if (book.getTitle() == null || book.getTitle().trim().isEmpty()) {
+            throw new BadRequestException("Title must not be empty");
+        }
+        if (book.getAuthor() == null || book.getAuthor().trim().isEmpty()) {
+            throw new BadRequestException("Author must not be empty");
+        }
+        if (book.getIsbn() == null || book.getIsbn().trim().isEmpty()) {
+            throw new BadRequestException("ISBN must not be empty");
+        }
+    }
+}
